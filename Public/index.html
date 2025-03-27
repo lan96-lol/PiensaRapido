@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Piensa Rápido - Juego de Vocabulario</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            text-align: center;
+        }
+        #menu-container, #game-container {
+            background-color: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 80%;
+            max-width: 600px;
+        }
+        .hidden {
+            display: none;
+        }
+        #start-btn {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #start-btn:hover {
+            background-color: #45a049;
+        }
+        #players-container {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .player {
+            border: 2px solid #4CAF50;
+            padding: 10px;
+            border-radius: 10px;
+            min-width: 100px;
+        }
+        .player.active {
+            background-color: #e0f7e0;
+        }
+        #timer {
+            font-size: 48px;
+            color: #FF5722;
+            margin: 20px 0;
+        }
+        #category {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        #alphabet {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .letter {
+            width: 40px;
+            height: 40px;
+            background-color: #3F51B5;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .letter.disabled {
+            background-color: #B0BEC5;
+            cursor: not-allowed;
+        }
+        #next-player {
+            padding: 15px 30px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #selected-letter {
+            font-size: 24px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        #game-title {
+            font-size: 36px;
+            color: #3F51B5;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu-container">
+        <h1 id="game-title">Piensa Rápido</h1>
+        <button id="start-btn">Iniciar Juego</button>
+    </div>
+
+    <div id="game-container" class="hidden">
+        <div id="category">Categoría: Animales</div>
+        <div id="timer">10</div>
+        <div id="selected-letter">Letra: </div>
+        <div id="players-container"></div>
+        <div id="alphabet"></div>
+        <button id="next-player">Siguiente Jugador</button>
+    </div>
+
+    <audio id="tick-sound">
+        <source src="timer-ticks-314055.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="timeout-sound">
+        <source src="campana-47073.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const CATEGORIES = [
+            'Animales', 'Frutas', 'Países', 'Actores', 
+            'Marcas', 'Deportes', 'Colores', 'Música'
+        ];
+
+        class PiensaRapido {
+            constructor() {
+                const DEFAULT_PLAYERS = 2;
+                this.playerCount = DEFAULT_PLAYERS;
+                this.players = Array.from({length: DEFAULT_PLAYERS}, (_, i) => ({
+                    name: `Jugador ${i + 1}`,
+                    score: 0
+                }));
+                this.currentPlayerIndex = 0;
+                this.currentCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+                this.currentLetter = '';
+                this.alphabet = 'abcdefghijklmnñopqrstuvwxyz'.split('');
+                this.disabledLetters = [];
+                this.timer = 10;
+                this.timerInterval = null;
+                this.timerStarted = false;
+
+                this.initializeGame();
+            }
+
+            initializeGame() {
+                this.setupUI();
+                this.setupEventListeners();
+            }
+
+            setupUI() {
+                const alphabetContainer = document.getElementById('alphabet');
+                const categoriesElement = document.getElementById('category');
+                const playersContainer = document.getElementById('players-container');
+                const selectedLetterElement = document.getElementById('selected-letter');
+
+                // Reiniciar contenedores
+                playersContainer.innerHTML = '';
+                alphabetContainer.innerHTML = '';
+                selectedLetterElement.textContent = 'Letra: ';
+
+                // Crear elementos de jugadores dinámicamente
+                this.players.forEach((player, index) => {
+                    const playerElement = document.createElement('div');
+                    playerElement.className = 'player';
+                    playerElement.id = `player${index + 1}`;
+                    playerElement.textContent = `${player.name}: ${player.score} puntos`;
+                    playersContainer.appendChild(playerElement);
+                });
+
+                // Generar letras del alfabeto
+                this.alphabet.forEach(letter => {
+                    const letterElement = document.createElement('div');
+                    letterElement.className = 'letter';
+                    letterElement.textContent = letter.toUpperCase();
+                    letterElement.dataset.letter = letter;
+                    alphabetContainer.appendChild(letterElement);
+                });
+
+                // Mostrar categoría actual
+                categoriesElement.textContent = `Categoría: ${this.currentCategory}`;
+            }
+
+            setupEventListeners() {
+                const letterElements = document.querySelectorAll('.letter');
+                const nextPlayerButton = document.getElementById('next-player');
+
+                letterElements.forEach(letter => {
+                    letter.addEventListener('click', this.selectLetter.bind(this));
+                });
+
+                nextPlayerButton.addEventListener('click', this.nextPlayer.bind(this));
+            }
+
+            selectLetter(event) {
+                const letter = event.target.dataset.letter;
+                if (this.disabledLetters.includes(letter)) return;
+
+                // Lógica para seleccionar letra
+                event.target.classList.add('disabled');
+                this.disabledLetters.push(letter);
+                this.currentLetter = letter;
+                
+                // Actualizar elemento de letra seleccionada
+                const selectedLetterElement = document.getElementById('selected-letter');
+                selectedLetterElement.textContent = `Letra: ${letter.toUpperCase()}`;
+
+                // Iniciar timer solo después de seleccionar letra la primera vez
+                if (!this.timerStarted) {
+                    this.startTimer();
+                    this.timerStarted = true;
+                }
+            }
+
+            startTimer() {
+                clearInterval(this.timerInterval);
+                this.timer = 10;
+                document.getElementById('timer').textContent = this.timer;
+
+                const tickSound = document.getElementById('tick-sound');
+                const timeoutSound = document.getElementById('timeout-sound');
+
+                this.timerInterval = setInterval(() => {
+                    this.timer--;
+                    document.getElementById('timer').textContent = this.timer;
+                    
+                    if (this.timer >= 10 && this.timer <= 0) {
+                        //clearInterval(this.setInterval);
+                        tickSound.play();
+                        
+                    } else {
+                        tickSound.pause();
+                        
+                    }
+
+                    if (this.timer === 0) {
+                        timeoutSound.play();
+                        this.eliminateCurrentPlayer();
+                        
+                        
+                    }
+                        
+                    
+
+    
+
+ 
+            
+                }, 1000);
+            }
+
+            eliminateCurrentPlayer() {
+                // Eliminar jugador actual
+                this.players.splice(this.currentPlayerIndex, 1);
+                
+                if (this.players.length === 1) {
+                    alert(`¡${this.players[0].name} ha ganado el juego!`);
+                    this.resetGame();
+                } else {
+                    // Cambiar categoría al eliminar un jugador
+                    this.currentCategory = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+                    document.getElementById('category').textContent = `Categoría: ${this.currentCategory}`;
+                    
+                    this.nextPlayer();
+                }
+            }
+
+            nextPlayer() {
+                // Sumar punto por sobrevivir al turno
+                this.players[this.currentPlayerIndex].score += 1;
+                
+                this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
+                this.updatePlayerScores();
+                this.highlightCurrentPlayer();
+                this.startTimer();
+            }
+
+            highlightCurrentPlayer() {
+                const playerElements = document.querySelectorAll('.player');
+                playerElements.forEach(el => el.classList.remove('active'));
+                
+                const currentPlayerElement = document.getElementById(`player${this.currentPlayerIndex + 1}`);
+                if (currentPlayerElement) {
+                    currentPlayerElement.classList.add('active');
+                }
+            }
+
+            updatePlayerScores() {
+                const playersContainer = document.getElementById('players-container');
+                this.players.forEach((player, index) => {
+                    const playerElement = document.getElementById(`player${index + 1}`);
+                    if (playerElement) {
+                        playerElement.textContent = `${player.name}: ${player.score} puntos`;
+                    }
+                });
+            }
+
+            resetGame() {
+                clearInterval(this.timerInterval);
+                
+                // Volver al menú principal
+                document.getElementById('menu-container').classList.remove('hidden');
+                document.getElementById('game-container').classList.add('hidden');
+            }
+
+            startNewRound() {
+                // Reiniciar letras y configuración
+                this.disabledLetters = [];
+                const letterElements = document.querySelectorAll('.letter');
+                letterElements.forEach(letter => {
+                    letter.classList.remove('disabled');
+                });
+                
+                // Reiniciar letra seleccionada
+                const selectedLetterElement = document.getElementById('selected-letter');
+                selectedLetterElement.textContent = 'Letra: ';
+                
+                this.timerStarted = false;
+                this.highlightCurrentPlayer();
+            }
+        }
+
+        // Configurar evento de inicio de juego
+        document.getElementById('start-btn').addEventListener('click', () => {
+            // Ocultar menú y mostrar juego
+            document.getElementById('menu-container').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('hidden');
+            
+            // Iniciar juego
+            const game = new PiensaRapido();
+        });
+    </script>
+</body>
+</html>
